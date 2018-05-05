@@ -8,6 +8,7 @@
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
+HWND  hMainWnd = NULL;
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
@@ -16,6 +17,7 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    GridSizeDlg(HWND, UINT, WPARAM, LPARAM);
 
 int spacing = 64;
 bool ontop = false;
@@ -79,7 +81,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENGRID));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-	wcex.lpszMenuName	= nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
+    wcex.lpszMenuName   = nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
     wcex.lpszClassName  = szWindowClass;
     wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -112,13 +114,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    HMENU pSysMenu = ::GetSystemMenu(hWnd, FALSE);
    if (pSysMenu)
    {
-	   ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
-	   ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
-	   ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+       ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
+       ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_GRIDSIZEDLG, TEXT("Set &Grid Size..."));
+       ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
+       ::InsertMenu(pSysMenu, 3, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
    }
 
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
+
+   hMainWnd = hWnd;
 
    return TRUE;
 }
@@ -138,7 +143,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_COMMAND:
-	case WM_SYSCOMMAND:
+    case WM_SYSCOMMAND:
         {
             int wmId = LOWORD(wParam);
             // Parse the menu selections:
@@ -147,32 +152,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
-			case IDM_STAYTOP:
-				{
-					RECT rect;
-					GetWindowRect(hWnd, &rect);
-					if (!ontop) {
-						::SetWindowPos(hWnd,        // handle to window
-							HWND_TOPMOST,           // placement-order handle
-							rect.left,              // horizontal position
-							rect.top,               // vertical position
-							rect.right - rect.left, // width
-							rect.bottom - rect.top, // height
-							SWP_SHOWWINDOW);        // window-positioning options
-						ontop = true;
-					}
-					else {
-						::SetWindowPos(hWnd,        // handle to window
-							HWND_NOTOPMOST,         // placement-order handle
-							rect.left,              // horizontal position
-							rect.top,               // vertical position
-							rect.right - rect.left, // width
-							rect.bottom - rect.top, // height
-							SWP_SHOWWINDOW); // window-positioning options
-						ontop = false;
-					}
-				}
-				break;
+            case IDM_GRIDSIZEDLG:
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_GRIDSIZE), hWnd, GridSizeDlg);
+                break;
+            case IDM_STAYTOP:
+                {
+                    RECT rect;
+                    GetWindowRect(hWnd, &rect);
+                    if (!ontop) {
+                        ::SetWindowPos(hWnd,        // handle to window
+                            HWND_TOPMOST,           // placement-order handle
+                            rect.left,              // horizontal position
+                            rect.top,               // vertical position
+                            rect.right - rect.left, // width
+                            rect.bottom - rect.top, // height
+                            SWP_SHOWWINDOW);        // window-positioning options
+                        ontop = true;
+                    }
+                    else {
+                        ::SetWindowPos(hWnd,        // handle to window
+                            HWND_NOTOPMOST,         // placement-order handle
+                            rect.left,              // horizontal position
+                            rect.top,               // vertical position
+                            rect.right - rect.left, // width
+                            rect.bottom - rect.top, // height
+                            SWP_SHOWWINDOW); // window-positioning options
+                        ontop = false;
+                    }
+                }
+                break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
@@ -203,16 +211,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             EndPaint(hWnd, &ps);
         }
         break;
-	case WM_MOUSEWHEEL:
-		{
-			int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-			spacing = max(16, min(128, spacing + zDelta/100));
-			std::stringstream ss;
-			ss << "ScreenGrid (" << spacing << "px)";
-			SetWindowTextA(hWnd, ss.str().c_str());
-			InvalidateRect(hWnd, NULL, NULL);
-		}
-		break;
+    case WM_MOUSEWHEEL:
+        {
+            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+            spacing = max(16, min(128, spacing + zDelta/100));
+            std::stringstream ss;
+            ss << "ScreenGrid (" << spacing << "px)";
+            SetWindowTextA(hWnd, ss.str().c_str());
+            InvalidateRect(hWnd, NULL, NULL);
+        }
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -234,6 +242,40 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
+// Message handler for grid size setting box.
+INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        {
+            std::stringstream ss;
+            ss << spacing;
+            SetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, ss.str().c_str());
+        }
+        return (INT_PTR)TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            if (LOWORD(wParam) == IDOK) {
+                char buf[512] = { 0 };
+                GetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, buf, 512);
+                spacing = max(16, min(128, atoi(buf)));
+                std::stringstream ss;
+                ss << "ScreenGrid (" << spacing << "px)";
+                SetWindowTextA(hMainWnd, ss.str().c_str());
+                InvalidateRect(hMainWnd, NULL, NULL);
+            }
+
             EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
         }
