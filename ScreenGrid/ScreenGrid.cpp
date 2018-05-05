@@ -1,8 +1,8 @@
 // ScreenGrid.cpp : Defines the entry point for the application.
 //
-
 #include "stdafx.h"
 #include "ScreenGrid.h"
+#include <sstream>
 
 #define MAX_LOADSTRING 100
 
@@ -16,6 +16,9 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+int spacing = 64;
+bool ontop = false;
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -76,7 +79,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENGRID));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_SCREENGRID);
+	wcex.lpszMenuName	= nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
     wcex.lpszClassName  = szWindowClass;
     wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -97,12 +100,21 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+   HWND hWnd = CreateWindowExW(WS_EX_LAYERED, szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
       CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
    {
       return FALSE;
+   }
+
+   SetLayeredWindowAttributes(hWnd, RGB(255, 255, 0), 0, LWA_COLORKEY);
+   HMENU pSysMenu = ::GetSystemMenu(hWnd, FALSE);
+   if (pSysMenu)
+   {
+	   ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
+	   ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
+	   ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
    }
 
    ShowWindow(hWnd, nCmdShow);
@@ -126,6 +138,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_COMMAND:
+	case WM_SYSCOMMAND:
         {
             int wmId = LOWORD(wParam);
             // Parse the menu selections:
@@ -134,9 +147,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
+			case IDM_STAYTOP:
+				{
+					RECT rect;
+					GetWindowRect(hWnd, &rect);
+					if (!ontop) {
+						::SetWindowPos(hWnd,        // handle to window
+							HWND_TOPMOST,           // placement-order handle
+							rect.left,              // horizontal position
+							rect.top,               // vertical position
+							rect.right - rect.left, // width
+							rect.bottom - rect.top, // height
+							SWP_SHOWWINDOW);        // window-positioning options
+						ontop = true;
+					}
+					else {
+						::SetWindowPos(hWnd,        // handle to window
+							HWND_NOTOPMOST,         // placement-order handle
+							rect.left,              // horizontal position
+							rect.top,               // vertical position
+							rect.right - rect.left, // width
+							rect.bottom - rect.top, // height
+							SWP_SHOWWINDOW); // window-positioning options
+						ontop = false;
+					}
+				}
+				break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
@@ -145,11 +181,38 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
+            RECT clientRect = { 0 };
             HDC hdc = BeginPaint(hWnd, &ps);
+            GetClientRect(hWnd, &clientRect);
             // TODO: Add any drawing code that uses hdc here...
+            auto brush = CreateSolidBrush(RGB(255, 255, 0));
+            SelectObject(hdc, brush);
+            Rectangle(hdc, 0, 0, clientRect.right, clientRect.bottom);
+            auto pen = CreatePen(PS_DOT, 1, RGB(0, 0, 0));
+            SelectObject(hdc, pen);
+            for (int i = spacing-1; i < clientRect.right; i += spacing) {
+                MoveToEx(hdc, i, 0, nullptr);
+                LineTo(hdc, i, clientRect.bottom);
+            }
+            for (int i = spacing-1; i < clientRect.bottom; i += spacing) {
+                MoveToEx(hdc, 0, i, nullptr);
+                LineTo(hdc, clientRect.right, i);
+            }
+            DeleteObject(brush);
+            DeleteObject(pen);
             EndPaint(hWnd, &ps);
         }
         break;
+	case WM_MOUSEWHEEL:
+		{
+			int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+			spacing = max(16, min(128, spacing + zDelta/100));
+			std::stringstream ss;
+			ss << "ScreenGrid (" << spacing << "px)";
+			SetWindowTextA(hWnd, ss.str().c_str());
+			InvalidateRect(hWnd, NULL, NULL);
+		}
+		break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
