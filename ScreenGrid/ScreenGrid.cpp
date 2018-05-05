@@ -261,7 +261,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_MOUSEWHEEL:
         {
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-            spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta/100));
+            spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta/abs(zDelta)));
             std::stringstream ss;
             updateTitle();
             InvalidateRect(hWnd, NULL, FALSE);
