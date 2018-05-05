@@ -2,9 +2,12 @@
 //
 #include "stdafx.h"
 #include "ScreenGrid.h"
+#include <commdlg.h>
 #include <sstream>
 
 #define MAX_LOADSTRING 100
+const int MAX_GRID_SPACING = 256;
+const int MIN_GRID_SPACING = 10;
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
@@ -21,6 +24,7 @@ INT_PTR CALLBACK    GridSizeDlg(HWND, UINT, WPARAM, LPARAM);
 
 int spacing = 64;
 bool ontop = false;
+COLORREF color = RGB(128, 128, 128);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -60,7 +64,41 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     return (int) msg.wParam;
 }
 
+void updateTitle()
+{
+    std::stringstream ss;
+    ss << "ScreenGrid (" << spacing << "px)";
+    if (ontop)
+        ss << "  [TOP]";
+    ::SetWindowTextA(hMainWnd, ss.str().c_str());
+}
 
+void toggleTopmost(HWND hWnd)
+{
+    RECT rect;
+    GetWindowRect(hWnd, &rect);
+    if (!ontop) {
+        ::SetWindowPos(hWnd,        // handle to window
+            HWND_TOPMOST,           // placement-order handle
+            rect.left,              // horizontal position
+            rect.top,               // vertical position
+            rect.right - rect.left, // width
+            rect.bottom - rect.top, // height
+            SWP_SHOWWINDOW);        // window-positioning options
+        ontop = true;
+    }
+    else {
+        ::SetWindowPos(hWnd,        // handle to window
+            HWND_NOTOPMOST,         // placement-order handle
+            rect.left,              // horizontal position
+            rect.top,               // vertical position
+            rect.right - rect.left, // width
+            rect.bottom - rect.top, // height
+            SWP_SHOWWINDOW); // window-positioning options
+        ontop = false;
+    }
+    updateTitle();
+}
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -116,14 +154,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    {
        ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
        ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_GRIDSIZEDLG, TEXT("Set &Grid Size..."));
-       ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
-       ::InsertMenu(pSysMenu, 3, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+       ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_STRING, IDM_CHOOSECOLOR, TEXT("Choose &Color..."));
+       ::InsertMenu(pSysMenu, 3, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
+       ::InsertMenu(pSysMenu, 4, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
    }
 
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
    hMainWnd = hWnd;
+   toggleTopmost(hWnd);
 
    return TRUE;
 }
@@ -142,6 +182,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_CREATE:
+        break;
     case WM_COMMAND:
     case WM_SYSCOMMAND:
         {
@@ -155,31 +197,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_GRIDSIZEDLG:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_GRIDSIZE), hWnd, GridSizeDlg);
                 break;
-            case IDM_STAYTOP:
+            case IDM_CHOOSECOLOR:
                 {
-                    RECT rect;
-                    GetWindowRect(hWnd, &rect);
-                    if (!ontop) {
-                        ::SetWindowPos(hWnd,        // handle to window
-                            HWND_TOPMOST,           // placement-order handle
-                            rect.left,              // horizontal position
-                            rect.top,               // vertical position
-                            rect.right - rect.left, // width
-                            rect.bottom - rect.top, // height
-                            SWP_SHOWWINDOW);        // window-positioning options
-                        ontop = true;
-                    }
-                    else {
-                        ::SetWindowPos(hWnd,        // handle to window
-                            HWND_NOTOPMOST,         // placement-order handle
-                            rect.left,              // horizontal position
-                            rect.top,               // vertical position
-                            rect.right - rect.left, // width
-                            rect.bottom - rect.top, // height
-                            SWP_SHOWWINDOW); // window-positioning options
-                        ontop = false;
+                    CHOOSECOLOR cc = { 0 };
+                    static COLORREF custClr[16] = { 0 };
+                    cc.lStructSize = sizeof(cc);
+                    cc.hwndOwner = hMainWnd;
+                    cc.rgbResult = color;
+                    cc.lpCustColors = custClr;
+                    cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+                    
+                    if (ChooseColor(&cc)) {
+                        color = cc.rgbResult;
+                        InvalidateRect(hMainWnd, NULL, FALSE);
                     }
                 }
+                break;
+            case IDM_STAYTOP:
+                toggleTopmost(hWnd);
                 break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
@@ -192,12 +227,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             RECT clientRect = { 0 };
             HDC hdc = BeginPaint(hWnd, &ps);
             GetClientRect(hWnd, &clientRect);
-            // TODO: Add any drawing code that uses hdc here...
             auto brush = CreateSolidBrush(RGB(255, 255, 0));
             SelectObject(hdc, brush);
             Rectangle(hdc, 0, 0, clientRect.right, clientRect.bottom);
-            auto pen = CreatePen(PS_DOT, 1, RGB(0, 0, 0));
+            auto pen = CreatePen(PS_DOT, 1, color);
+            auto thickPen = CreatePen(PS_SOLID, 1, color);
+            auto transPen = CreatePen(PS_SOLID, 3, RGB(255, 255, 0));
             SelectObject(hdc, pen);
+            SetBkMode(hdc, TRANSPARENT);
             for (int i = spacing-1; i < clientRect.right; i += spacing) {
                 MoveToEx(hdc, i, 0, nullptr);
                 LineTo(hdc, i, clientRect.bottom);
@@ -206,19 +243,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 MoveToEx(hdc, 0, i, nullptr);
                 LineTo(hdc, clientRect.right, i);
             }
+            SelectObject(hdc, thickPen);
+            for (int i = spacing - 1 + spacing * 3; i < clientRect.right; i += spacing * 4) {
+                MoveToEx(hdc, i, 0, nullptr);
+                LineTo(hdc, i, clientRect.bottom);
+            }
+            for (int i = spacing - 1 + spacing * 3; i < clientRect.right; i += spacing * 4) {
+                MoveToEx(hdc, 0, i, nullptr);
+                LineTo(hdc, clientRect.right, i);
+            }
             DeleteObject(brush);
             DeleteObject(pen);
+            DeleteObject(thickPen);
             EndPaint(hWnd, &ps);
         }
         break;
     case WM_MOUSEWHEEL:
         {
             int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-            spacing = max(16, min(128, spacing + zDelta/100));
+            spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta/100));
             std::stringstream ss;
-            ss << "ScreenGrid (" << spacing << "px)";
-            SetWindowTextA(hWnd, ss.str().c_str());
-            InvalidateRect(hWnd, NULL, NULL);
+            updateTitle();
+            InvalidateRect(hWnd, NULL, FALSE);
         }
         break;
     case WM_DESTROY:
@@ -269,11 +315,9 @@ INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
             if (LOWORD(wParam) == IDOK) {
                 char buf[512] = { 0 };
                 GetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, buf, 512);
-                spacing = max(16, min(128, atoi(buf)));
-                std::stringstream ss;
-                ss << "ScreenGrid (" << spacing << "px)";
-                SetWindowTextA(hMainWnd, ss.str().c_str());
-                InvalidateRect(hMainWnd, NULL, NULL);
+                spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, atoi(buf)));
+                updateTitle();
+                InvalidateRect(hMainWnd, NULL, FALSE);
             }
 
             EndDialog(hDlg, LOWORD(wParam));
