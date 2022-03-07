@@ -8,6 +8,7 @@
 #define MAX_LOADSTRING 100
 const int MAX_GRID_SPACING = 256;
 const int MIN_GRID_SPACING = 10;
+const COLORREF TRANSPARENT_COLOR = RGB(255, 255, 0);
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
@@ -25,6 +26,10 @@ INT_PTR CALLBACK    GridSizeDlg(HWND, UINT, WPARAM, LPARAM);
 int spacing = 64;
 bool ontop = false;
 COLORREF color = RGB(128, 128, 128);
+// Grid Offset
+bool  offsetting = false;
+int64_t offsetX = 0, offsetY = 0;
+int64_t offsetAnchorX = 0, offsetAnchorY = 0;
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -34,15 +39,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
-
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_SCREENGRID, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
 
     // Perform application initialization:
-    if (!InitInstance (hInstance, nCmdShow))
+    if (!InitInstance(hInstance, nCmdShow))
     {
         return FALSE;
     }
@@ -61,7 +64,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
 
-    return (int) msg.wParam;
+    return (int)msg.wParam;
 }
 
 void updateTitle()
@@ -111,17 +114,17 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
     wcex.cbSize = sizeof(WNDCLASSEX);
 
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENGRID));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.style         = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc   = WndProc;
+    wcex.cbClsExtra    = 0;
+    wcex.cbWndExtra    = 0;
+    wcex.hInstance     = hInstance;
+    wcex.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENGRID));
+    wcex.hCursor       = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+    wcex.lpszMenuName  = nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
+    wcex.lpszClassName = szWindowClass;
+    wcex.hIconSm       = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
     return RegisterClassExW(&wcex);
 }
@@ -138,134 +141,167 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   hInst = hInstance; // Store instance handle in our global variable
+    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowExW(WS_EX_LAYERED, szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+    HWND hWnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_COMPOSITED | WS_EX_APPWINDOW | WS_EX_WINDOWEDGE, 
+                  szWindowClass, szTitle, WS_OVERLAPPEDWINDOW ^ WS_MAXIMIZEBOX,
+                  CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
+    if (!hWnd)
+    {
+        return FALSE;
+    }
 
-   SetLayeredWindowAttributes(hWnd, RGB(255, 255, 0), 0, LWA_COLORKEY);
-   HMENU pSysMenu = ::GetSystemMenu(hWnd, FALSE);
-   if (pSysMenu)
-   {
-       ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
-       ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_GRIDSIZEDLG, TEXT("Set &Grid Size..."));
-       ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_STRING, IDM_CHOOSECOLOR, TEXT("Choose &Color..."));
-       ::InsertMenu(pSysMenu, 3, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
-       ::InsertMenu(pSysMenu, 4, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-   }
+    SetLayeredWindowAttributes(hWnd, TRANSPARENT_COLOR, 0, LWA_COLORKEY);
+    HMENU pSysMenu = ::GetSystemMenu(hWnd, FALSE);
+    if (pSysMenu)
+    {
+        ::InsertMenu(pSysMenu, 0, MF_BYPOSITION | MF_STRING, IDM_ABOUT, TEXT("&About ..."));
+        ::InsertMenu(pSysMenu, 1, MF_BYPOSITION | MF_STRING, IDM_GRIDSIZEDLG, TEXT("Set &Grid Size..."));
+        ::InsertMenu(pSysMenu, 2, MF_BYPOSITION | MF_STRING, IDM_CHOOSECOLOR, TEXT("Choose &Color..."));
+        ::InsertMenu(pSysMenu, 3, MF_BYPOSITION | MF_STRING, IDM_STAYTOP, TEXT("Toggle Stay On &Top"));
+        ::InsertMenu(pSysMenu, 4, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+    }
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
 
-   hMainWnd = hWnd;
-   toggleTopmost(hWnd);
+    hMainWnd = hWnd;
+    toggleTopmost(hWnd);
 
-   return TRUE;
+    return TRUE;
 }
 
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE:  Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    static UPDATELAYEREDWINDOWINFO updateinfo = { 0 };
+    updateinfo.cbSize = sizeof(UPDATELAYEREDWINDOWINFO);
+    updateinfo.hdcDst = NULL;
+    updateinfo.pptDst = NULL;
+    updateinfo.psize = NULL;
+    updateinfo.hdcSrc = NULL;
+    updateinfo.pptSrc = NULL;
+    updateinfo.crKey = TRANSPARENT_COLOR;
+    updateinfo.pblend = NULL;
+    updateinfo.dwFlags = ULW_COLORKEY;
+    updateinfo.prcDirty = NULL;
+
     switch (message)
     {
-    case WM_CREATE:
-        break;
     case WM_COMMAND:
     case WM_SYSCOMMAND:
+    {
+        int wmId = LOWORD(wParam);
+        // Parse the menu selections:
+        switch (wmId)
         {
-            int wmId = LOWORD(wParam);
-            // Parse the menu selections:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_GRIDSIZEDLG:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_GRIDSIZE), hWnd, GridSizeDlg);
-                break;
-            case IDM_CHOOSECOLOR:
-                {
-                    CHOOSECOLOR cc = { 0 };
-                    static COLORREF custClr[16] = { 0 };
-                    cc.lStructSize = sizeof(cc);
-                    cc.hwndOwner = hMainWnd;
-                    cc.rgbResult = color;
-                    cc.lpCustColors = custClr;
-                    cc.Flags = CC_FULLOPEN | CC_RGBINIT;
-                    
-                    if (ChooseColor(&cc)) {
-                        color = cc.rgbResult;
-                        InvalidateRect(hMainWnd, NULL, FALSE);
-                    }
-                }
-                break;
-            case IDM_STAYTOP:
-                toggleTopmost(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
+        case IDM_ABOUT:
+            DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+            break;
+        case IDM_GRIDSIZEDLG:
+            DialogBox(hInst, MAKEINTRESOURCE(IDD_GRIDSIZE), hWnd, GridSizeDlg);
+            break;
+        case IDM_CHOOSECOLOR:
+        {
+            CHOOSECOLOR cc = { 0 };
+            static COLORREF custClr[16] = { 0 };
+            cc.lStructSize = sizeof(cc);
+            cc.hwndOwner = hMainWnd;
+            cc.rgbResult = color;
+            cc.lpCustColors = custClr;
+            cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+
+            if (ChooseColor(&cc)) {
+                color = cc.rgbResult;
+                if (color == TRANSPARENT_COLOR)
+                    color = TRANSPARENT_COLOR + 1;
+                InvalidateRect(hMainWnd, NULL, FALSE);
             }
         }
         break;
+        case IDM_STAYTOP:
+            toggleTopmost(hWnd);
+            break;
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+    }
+    break;
     case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            RECT clientRect = { 0 };
-            HDC hdc = BeginPaint(hWnd, &ps);
-            GetClientRect(hWnd, &clientRect);
-            auto brush = CreateSolidBrush(RGB(255, 255, 0));
-            SelectObject(hdc, brush);
-            Rectangle(hdc, 0, 0, clientRect.right, clientRect.bottom);
-            auto pen = CreatePen(PS_DOT, 1, color);
-            auto thickPen = CreatePen(PS_SOLID, 1, color);
-            auto transPen = CreatePen(PS_SOLID, 3, RGB(255, 255, 0));
-            SelectObject(hdc, pen);
-            SetBkMode(hdc, TRANSPARENT);
-            for (int i = spacing-1; i < clientRect.right; i += spacing) {
-                MoveToEx(hdc, i, 0, nullptr);
-                LineTo(hdc, i, clientRect.bottom);
-            }
-            for (int i = spacing-1; i < clientRect.bottom; i += spacing) {
-                MoveToEx(hdc, 0, i, nullptr);
-                LineTo(hdc, clientRect.right, i);
-            }
-            SelectObject(hdc, thickPen);
-            for (int i = spacing - 1 + spacing * 3; i < clientRect.right; i += spacing * 4) {
-                MoveToEx(hdc, i, 0, nullptr);
-                LineTo(hdc, i, clientRect.bottom);
-            }
-            for (int i = spacing - 1 + spacing * 3; i < clientRect.right; i += spacing * 4) {
-                MoveToEx(hdc, 0, i, nullptr);
-                LineTo(hdc, clientRect.right, i);
-            }
-            DeleteObject(brush);
-            DeleteObject(pen);
-            DeleteObject(thickPen);
-            EndPaint(hWnd, &ps);
+    {
+        PAINTSTRUCT ps;
+        RECT clientRect = { 0 };
+        HDC hdc = BeginPaint(hWnd, &ps);
+        GetClientRect(hWnd, &clientRect);
+        auto brush = CreateSolidBrush(TRANSPARENT_COLOR);
+        SelectObject(hdc, brush);
+        Rectangle(hdc, 0, 0, clientRect.right, clientRect.bottom);
+        auto dotPen = CreatePen(PS_DOT, 1, color);
+        auto thickPen = CreatePen(PS_SOLID, 1, color);
+        SelectObject(hdc, dotPen);
+        SetBkMode(hdc, TRANSPARENT);
+        for (int i = (spacing - 1 + offsetX) % spacing; i < clientRect.right; i += spacing) {
+            MoveToEx(hdc, i, 0, nullptr);
+            LineTo(hdc, i, clientRect.bottom);
+        }
+        for (int i = (spacing - 1 + offsetY) % spacing; i < clientRect.bottom; i += spacing) {
+            MoveToEx(hdc, 0, i, nullptr);
+            LineTo(hdc, clientRect.right, i);
+        }
+        SelectObject(hdc, thickPen);
+        for (int i = (spacing - 1 + spacing * 3 + offsetX) % (4 * spacing); i < clientRect.right; i += spacing * 4) {
+            MoveToEx(hdc, i, 0, nullptr);
+            LineTo(hdc, i, clientRect.bottom);
+        }
+        for (int i = (spacing - 1 + spacing * 3 + offsetY) % (4 * spacing); i < clientRect.right; i += spacing * 4) {
+            MoveToEx(hdc, 0, i, nullptr);
+            LineTo(hdc, clientRect.right, i);
+        }
+        DeleteObject(brush);
+        DeleteObject(dotPen);
+        DeleteObject(thickPen);
+        EndPaint(hWnd, &ps);
+    }
+    break;
+    case WM_MOUSEWHEEL:
+    {
+        int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+        int newSpacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta / abs(zDelta)));
+        if (newSpacing != spacing) {
+            // offset+gridpos*spacing = center
+            // newOffset+gridpos*newSpacing == center
+            int64_t centerX = LOWORD(lParam);
+            int64_t centerY = HIWORD(lParam);
+            float gridposX = float(centerX - offsetX) / spacing;
+            float gridposY = float(centerY - offsetY) / spacing;
+            offsetX = WORD(centerX - gridposX * newSpacing);
+            offsetY = WORD(centerY - gridposY * newSpacing);
+            InvalidateRect(hWnd, NULL, FALSE);
+            spacing = newSpacing;
+            updateTitle();
+        }
+    }
+    break;
+    case WM_LBUTTONDOWN:
+        offsetting = true;
+        offsetAnchorX = LOWORD(lParam) - offsetX;
+        offsetAnchorY = HIWORD(lParam) - offsetY;
+        ::SetCapture(hWnd);
+        break;
+    case WM_MOUSEMOVE:
+        if (offsetting) {
+            offsetX = LOWORD(lParam) - offsetAnchorX;
+            offsetY = HIWORD(lParam) - offsetAnchorY;
+            InvalidateRect(hWnd, NULL, FALSE);
+            //std::string msg = "offsetting: " + std::to_string(offsetX) + ", " + std::to_string(offsetY) + "\n";
+            //OutputDebugStringA(msg.c_str());
         }
         break;
-    case WM_MOUSEWHEEL:
-        {
-            int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-            spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta/abs(zDelta)));
-            std::stringstream ss;
-            updateTitle();
-            InvalidateRect(hWnd, NULL, FALSE);
-        }
+    case WM_LBUTTONUP:
+    case WM_MOUSELEAVE:
+    case WM_KILLFOCUS:
+        offsetting = false;
+        ::ReleaseCapture();
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -303,12 +339,12 @@ INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
     switch (message)
     {
     case WM_INITDIALOG:
-        {
-            std::stringstream ss;
-            ss << spacing;
-            SetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, ss.str().c_str());
-        }
-        return (INT_PTR)TRUE;
+    {
+        std::stringstream ss;
+        ss << spacing;
+        SetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, ss.str().c_str());
+    }
+    return (INT_PTR)TRUE;
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
         {
@@ -327,3 +363,9 @@ INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
     }
     return (INT_PTR)FALSE;
 }
+
+
+// black magic ...
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
