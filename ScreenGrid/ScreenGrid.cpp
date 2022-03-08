@@ -125,7 +125,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
     wcex.lpszMenuName  = nullptr; // MAKEINTRESOURCEW(IDC_SCREENGRID);
     wcex.lpszClassName = szWindowClass;
-    wcex.hIconSm       = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.hIconSm       = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SCREENGRID));
 
     return RegisterClassExW(&wcex);
 }
