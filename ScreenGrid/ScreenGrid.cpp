@@ -319,8 +319,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         offsetting = false;
         ::ReleaseCapture();
         break;
+    case WM_KEYDOWN:
+        if (wParam == 'Q' || wParam == VK_ESCAPE)
+    {
     case WM_DESTROY:
         PostQuitMessage(0);
+    }
         break;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
