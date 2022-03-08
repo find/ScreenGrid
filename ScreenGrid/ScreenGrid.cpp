@@ -2,8 +2,10 @@
 //
 #include "stdafx.h"
 #include "ScreenGrid.h"
-#include <windowsx.h>
+
 #include <commdlg.h>
+#include <windowsx.h>
+#include <algorithm>
 #include <sstream>
 
 #define MAX_LOADSTRING 100
@@ -32,9 +34,9 @@ bool  offsetting = false;
 int64_t offsetX = 0, offsetY = 0;
 int64_t offsetAnchorX = 0, offsetAnchorY = 0;
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
+int APIENTRY WinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
+                     _In_ LPSTR     lpCmdLine,
                      _In_ int       nCmdShow)
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
@@ -276,7 +278,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_MOUSEWHEEL:
     {
         int zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
-        int newSpacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, spacing + zDelta / abs(zDelta)));
+        int newSpacing = std::max(MIN_GRID_SPACING, std::min(MAX_GRID_SPACING, spacing + zDelta / abs(zDelta)));
         if (newSpacing != spacing) {
             // offset+gridpos*spacing = center
             // newOffset+gridpos*newSpacing == center
@@ -365,7 +367,7 @@ INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
             if (LOWORD(wParam) == IDOK) {
                 char buf[512] = { 0 };
                 GetDlgItemTextA(hDlg, IDC_GRIDSIZE_EDIT, buf, 512);
-                spacing = max(MIN_GRID_SPACING, min(MAX_GRID_SPACING, atoi(buf)));
+                spacing = std::max(MIN_GRID_SPACING, std::min(MAX_GRID_SPACING, atoi(buf)));
                 updateTitle();
                 InvalidateRect(hMainWnd, NULL, FALSE);
             }
@@ -378,8 +380,3 @@ INT_PTR CALLBACK GridSizeDlg(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPar
     return (INT_PTR)FALSE;
 }
 
-
-// black magic ...
-#pragma comment(linker,"\"/manifestdependency:type='win32' \
-name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
-processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
