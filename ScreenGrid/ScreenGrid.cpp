@@ -2,6 +2,7 @@
 //
 #include "stdafx.h"
 #include "ScreenGrid.h"
+#include <windowsx.h>
 #include <commdlg.h>
 #include <sstream>
 
@@ -174,17 +175,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    static UPDATELAYEREDWINDOWINFO updateinfo = { 0 };
-    updateinfo.cbSize = sizeof(UPDATELAYEREDWINDOWINFO);
-    updateinfo.hdcDst = NULL;
-    updateinfo.pptDst = NULL;
-    updateinfo.psize = NULL;
-    updateinfo.hdcSrc = NULL;
-    updateinfo.pptSrc = NULL;
-    updateinfo.crKey = TRANSPARENT_COLOR;
-    updateinfo.pblend = NULL;
-    updateinfo.dwFlags = ULW_COLORKEY;
-    updateinfo.prcDirty = NULL;
+    //static UPDATELAYEREDWINDOWINFO updateinfo = { 0 };
+    //updateinfo.cbSize = sizeof(UPDATELAYEREDWINDOWINFO);
+    //updateinfo.hdcDst = NULL;
+    //updateinfo.pptDst = NULL;
+    //updateinfo.psize = NULL;
+    //updateinfo.hdcSrc = NULL;
+    //updateinfo.pptSrc = NULL;
+    //updateinfo.crKey = TRANSPARENT_COLOR;
+    //updateinfo.pblend = NULL;
+    //updateinfo.dwFlags = ULW_COLORKEY;
+    //updateinfo.prcDirty = NULL;
 
     switch (message)
     {
@@ -231,32 +232,41 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         PAINTSTRUCT ps;
         RECT clientRect = { 0 };
-        HDC hdc = BeginPaint(hWnd, &ps);
         GetClientRect(hWnd, &clientRect);
+        HDC hdc = BeginPaint(hWnd, &ps);
+        HDC memdc = CreateCompatibleDC(hdc);
+        HBITMAP memmap = CreateCompatibleBitmap(hdc, clientRect.right, clientRect.bottom);
+        auto oldmemmap = SelectObject(memdc, memmap);
+
         auto brush = CreateSolidBrush(TRANSPARENT_COLOR);
-        SelectObject(hdc, brush);
-        Rectangle(hdc, 0, 0, clientRect.right, clientRect.bottom);
+        SelectObject(memdc, brush);
+        Rectangle(memdc, 0, 0, clientRect.right, clientRect.bottom);
         auto dotPen = CreatePen(PS_DOT, 1, color);
         auto thickPen = CreatePen(PS_SOLID, 1, color);
-        SelectObject(hdc, dotPen);
-        SetBkMode(hdc, TRANSPARENT);
+        SelectObject(memdc, dotPen);
+        SetBkMode(memdc, TRANSPARENT);
         for (int i = (spacing - 1 + offsetX) % spacing; i < clientRect.right; i += spacing) {
-            MoveToEx(hdc, i, 0, nullptr);
-            LineTo(hdc, i, clientRect.bottom);
+            MoveToEx(memdc, i, 0, nullptr);
+            LineTo(memdc, i, clientRect.bottom);
         }
         for (int i = (spacing - 1 + offsetY) % spacing; i < clientRect.bottom; i += spacing) {
-            MoveToEx(hdc, 0, i, nullptr);
-            LineTo(hdc, clientRect.right, i);
+            MoveToEx(memdc, 0, i, nullptr);
+            LineTo(memdc, clientRect.right, i);
         }
-        SelectObject(hdc, thickPen);
+        SelectObject(memdc, thickPen);
         for (int i = (spacing - 1 + spacing * 3 + offsetX) % (4 * spacing); i < clientRect.right; i += spacing * 4) {
-            MoveToEx(hdc, i, 0, nullptr);
-            LineTo(hdc, i, clientRect.bottom);
+            MoveToEx(memdc, i, 0, nullptr);
+            LineTo(memdc, i, clientRect.bottom);
         }
         for (int i = (spacing - 1 + spacing * 3 + offsetY) % (4 * spacing); i < clientRect.right; i += spacing * 4) {
-            MoveToEx(hdc, 0, i, nullptr);
-            LineTo(hdc, clientRect.right, i);
+            MoveToEx(memdc, 0, i, nullptr);
+            LineTo(memdc, clientRect.right, i);
         }
+        BitBlt(hdc, 0, 0, clientRect.right, clientRect.bottom, memdc, 0, 0, SRCCOPY);
+        SelectObject(memdc, oldmemmap);
+        DeleteObject(memmap);
+        DeleteDC(memdc);
+
         DeleteObject(brush);
         DeleteObject(dotPen);
         DeleteObject(thickPen);
@@ -270,12 +280,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (newSpacing != spacing) {
             // offset+gridpos*spacing = center
             // newOffset+gridpos*newSpacing == center
-            int64_t centerX = LOWORD(lParam);
-            int64_t centerY = HIWORD(lParam);
+            auto centerX = GET_X_LPARAM(lParam);
+            auto centerY = GET_Y_LPARAM(lParam);
+            POINT clientpt = { centerX, centerY };
+            ::ScreenToClient(hWnd, &clientpt);
+            centerX = clientpt.x;
+            centerY = clientpt.y;
             float gridposX = float(centerX - offsetX) / spacing;
             float gridposY = float(centerY - offsetY) / spacing;
-            offsetX = WORD(centerX - gridposX * newSpacing);
-            offsetY = WORD(centerY - gridposY * newSpacing);
+            offsetX = int64_t(centerX - gridposX * newSpacing);
+            offsetY = int64_t(centerY - gridposY * newSpacing);
             InvalidateRect(hWnd, NULL, FALSE);
             spacing = newSpacing;
             updateTitle();
@@ -284,14 +298,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     break;
     case WM_LBUTTONDOWN:
         offsetting = true;
-        offsetAnchorX = LOWORD(lParam) - offsetX;
-        offsetAnchorY = HIWORD(lParam) - offsetY;
+        offsetAnchorX = GET_X_LPARAM(lParam) - offsetX;
+        offsetAnchorY = GET_Y_LPARAM(lParam) - offsetY;
         ::SetCapture(hWnd);
         break;
     case WM_MOUSEMOVE:
         if (offsetting) {
-            offsetX = LOWORD(lParam) - offsetAnchorX;
-            offsetY = HIWORD(lParam) - offsetAnchorY;
+            offsetX = GET_X_LPARAM(lParam) - offsetAnchorX;
+            offsetY = GET_Y_LPARAM(lParam) - offsetAnchorY;
             InvalidateRect(hWnd, NULL, FALSE);
             //std::string msg = "offsetting: " + std::to_string(offsetX) + ", " + std::to_string(offsetY) + "\n";
             //OutputDebugStringA(msg.c_str());
