@@ -145,7 +145,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     hInst = hInstance; // Store instance handle in our global variable
 
     HWND hWnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_COMPOSITED | WS_EX_APPWINDOW | WS_EX_WINDOWEDGE, 
-                  szWindowClass, szTitle, WS_OVERLAPPEDWINDOW ^ WS_MAXIMIZEBOX,
+                  szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
                   CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
     if (!hWnd)
