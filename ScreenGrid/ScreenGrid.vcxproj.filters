@@ -45,10 +45,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="ScreenGrid.ico">
+    <Image Include="if.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
